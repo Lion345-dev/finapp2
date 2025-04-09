@@ -57,24 +57,57 @@ def get_sp500_tickers():
 # Función para cargar datos
 @st.cache_data(ttl=3600, show_spinner="Obteniendo datos de mercado...")
 def load_ticker_data(ticker, start_date, end_date):
-    try:
-        time.sleep(randint(1, 3))
-        start_str = start_date.strftime('%Y-%m-%d')
-        end_str = (end_date + timedelta(days=1)).strftime('%Y-%m-%d')
-        data = yf.download(ticker, start=start_str, end=end_str, progress=False, timeout=10)
-        if data.empty:
-            st.warning(f"Intentando descargar el historico completo para {ticker}...")
-            data = yf.download(ticker, period="max", progress=False)
+    max_retries = 5  # Aumentamos el número de reintentos
+    for attempt in range(max_retries):
+        try:
+            # Añadir un retraso progresivo entre intentos
+            time.sleep((attempt + 1) * 2)
+            
+            # Primer intento: usar período específico
+            data = yf.download(
+                ticker,
+                start=start_date.strftime('%Y-%m-%d'),
+                end=end_date.strftime('%Y-%m-%d'),
+                progress=False,
+                timeout=30,  # Aumentamos el timeout
+                prepost=True,
+                interval='1d'  # Especificamos el intervalo
+            )
+            
+            # Si no hay datos, intentar con períodos predefinidos
+            if data.empty:
+                st.info(f"Intentando períodos alternativos para {ticker}...")
+                periods = ['1y', '2y', 'max']
+                for period in periods:
+                    data = yf.download(
+                        ticker,
+                        period=period,
+                        progress=False,
+                        timeout=30,
+                        prepost=True,
+                        interval='1d'
+                    )
+                    if not data.empty:
+                        break
+            
+            # Verificar y limpiar datos
             if not data.empty:
-                data = data.loc[start_str:end_str]
-        if data.empty:
-            st.error(f"No se encontraron datos para {ticker} en el rango especificado")
-            return None
-        data = data[['Open', 'High', 'Low', 'Close', 'Volume']].ffill().bfill()
-        return data
-    except Exception as e:
-        st.error(f"Error al cargar datos para {ticker}: {str(e)}")
-        return None
+                data = data[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
+                data = data.ffill().bfill()  # Rellenar valores faltantes
+                return data
+            
+            if attempt == max_retries - 1:
+                st.error(f"No se pudieron obtener datos para {ticker} después de {max_retries} intentos")
+                return None
+                
+        except Exception as e:
+            if attempt == max_retries - 1:
+                st.error(f"Error al cargar datos para {ticker}: {str(e)}")
+                return None
+            st.warning(f"Reintento {attempt + 1} de {max_retries}...")
+            continue
+    
+    return None
 
 # Sidebar con configuración
 with st.sidebar:
