@@ -2,3 +2,4 @@
 API_Key.env
 .env
 .streamlit/
+__pycache__/

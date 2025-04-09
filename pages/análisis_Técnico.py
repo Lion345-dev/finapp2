@@ -15,16 +15,31 @@ from dotenv import load_dotenv
 import os
 import google.generativeai as genai
 
-# Cargar variables de entorno desde .env
-load_dotenv()
+# Intentar obtener API Key de diferentes fuentes
+try:
+    # Primero intentar desde Streamlit Secrets
+    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+except:
+    # Si no está en secrets, intentar desde .env
+    load_dotenv()
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Configurar API Key
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# Configurar API Key con mejor manejo de errores
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    st.success("API de Gemini configurada correctamente")
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        st.success("API de Gemini configurada correctamente")
+    except Exception as e:
+        st.error(f"Error al configurar Gemini: {str(e)}")
 else:
-    st.error("No se encontró la API Key de Gemini. Por favor, configura GEMINI_API_KEY en el archivo .env")
+    st.error("No se encontró la API Key de Gemini")
+
+# Código de verificación (eliminar en producción)
+if st.checkbox("Debug API Key"):
+    if "GEMINI_API_KEY" in st.secrets:
+        st.success("API Key encontrada en secretos de Streamlit")
+    else:
+        st.error("API Key no encontrada en secretos de Streamlit")
 
 st.title("📈 Análisis Técnico Avanzado")
 st.markdown("""
