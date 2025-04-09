@@ -1,0 +1,3 @@
+git remote add origin https://github.com/Lion345-dev/finapp2.git
+git branch -M main
+git push -u origin main
