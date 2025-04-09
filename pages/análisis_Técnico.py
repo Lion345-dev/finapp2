@@ -18,13 +18,16 @@ import google.generativeai as genai
 # Cargar variables de entorno desde .env
 load_dotenv()
 
-# Configurar API Key
+# Configurar API Key con mejor manejo de errores
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    st.success("API de Gemini configurada correctamente")
-else:
-    st.error("No se encontró la API Key de Gemini. Por favor, configura GEMINI_API_KEY en el archivo .env")
+try:
+    if GEMINI_API_KEY:
+        genai.configure(api_key=GEMINI_API_KEY)
+        st.success("API de Gemini configurada correctamente")
+    else:
+        st.warning("API Key de Gemini no encontrada")
+except Exception as e:
+    st.error(f"Error al configurar Gemini: {str(e)}")
 
 st.title("📈 Análisis Técnico Avanzado")
 st.markdown("""

@@ -1,2 +1,4 @@
 *.env
 API_Key.env
+.env
+.streamlit/
