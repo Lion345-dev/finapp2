@@ -18,16 +18,13 @@ import google.generativeai as genai
 # Cargar variables de entorno desde .env
 load_dotenv()
 
-# Configurar API Key con mejor manejo de errores
+# Configurar API Key
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-try:
-    if GEMINI_API_KEY:
-        genai.configure(api_key=GEMINI_API_KEY)
-        st.success("API de Gemini configurada correctamente")
-    else:
-        st.warning("API Key de Gemini no encontrada")
-except Exception as e:
-    st.error(f"Error al configurar Gemini: {str(e)}")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    st.success("API de Gemini configurada correctamente")
+else:
+    st.error("No se encontró la API Key de Gemini. Por favor, configura GEMINI_API_KEY en el archivo .env")
 
 st.title("📈 Análisis Técnico Avanzado")
 st.markdown("""
@@ -60,54 +57,64 @@ def get_sp500_tickers():
 # Función para cargar datos
 @st.cache_data(ttl=3600, show_spinner="Obteniendo datos de mercado...")
 def load_ticker_data(ticker, start_date, end_date):
-    max_retries = 5  # Aumentamos el número de reintentos
+    max_retries = 5  # Más reintentos
+    
     for attempt in range(max_retries):
         try:
-            # Añadir un retraso progresivo entre intentos
+            # Delay progresivo
             time.sleep((attempt + 1) * 2)
             
-            # Primer intento: usar período específico
-            data = yf.download(
-                ticker,
-                start=start_date.strftime('%Y-%m-%d'),
-                end=end_date.strftime('%Y-%m-%d'),
-                progress=False,
-                timeout=30,  # Aumentamos el timeout
-                prepost=True,
-                interval='1d'  # Especificamos el intervalo
-            )
+            # Verificar si el ticker existe
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            if not info:
+                raise ValueError(f"No se encontró información para {ticker}")
             
-            # Si no hay datos, intentar con períodos predefinidos
-            if data.empty:
-                st.info(f"Intentando períodos alternativos para {ticker}...")
-                periods = ['1y', '2y', 'max']
-                for period in periods:
-                    data = yf.download(
-                        ticker,
-                        period=period,
-                        progress=False,
-                        timeout=30,
-                        prepost=True,
-                        interval='1d'
-                    )
-                    if not data.empty:
-                        break
-            
-            # Verificar y limpiar datos
-            if not data.empty:
-                data = data[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
-                data = data.ffill().bfill()  # Rellenar valores faltantes
-                return data
-            
-            if attempt == max_retries - 1:
-                st.error(f"No se pudieron obtener datos para {ticker} después de {max_retries} intentos")
-                return None
+            # Intentar diferentes períodos si el específico falla
+            try:
+                # Primer intento con período específico
+                data = yf.download(
+                    ticker,
+                    start=start_date.strftime('%Y-%m-%d'),
+                    end=end_date.strftime('%Y-%m-%d'),
+                    progress=False,
+                    timeout=30,  # Timeout más largo
+                    prepost=True,
+                    interval='1d'  # Especificar intervalo diario
+                )
+                
+                if data.empty:
+                    # Intentar con períodos predefinidos
+                    periods = ['1y', '2y', 'max']
+                    for period in periods:
+                        st.info(f"Intentando con período {period}...")
+                        data = yf.download(
+                            ticker,
+                            period=period,
+                            progress=False,
+                            timeout=30,  # Timeout más largo
+                            prepost=True,
+                            interval='1d'  # Especificar intervalo diario
+                        )
+                        if not data.empty:
+                            break
+                
+                if not data.empty:
+                    # Limpiar y preparar datos
+                    data = data[['Open', 'High', 'Low', 'Close', 'Volume']]
+                    data = data.ffill().bfill()
+                    return data
+                    
+            except Exception as e:
+                st.warning(f"Error en intento {attempt + 1}: {str(e)}")
+                if attempt == max_retries - 1:
+                    raise e
+                continue
                 
         except Exception as e:
             if attempt == max_retries - 1:
-                st.error(f"Error al cargar datos para {ticker}: {str(e)}")
+                st.error(f"Error al cargar {ticker}: {str(e)}")
                 return None
-            st.warning(f"Reintento {attempt + 1} de {max_retries}...")
             continue
     
     return None
@@ -171,7 +178,15 @@ else:
     start_date = end_date - timedelta(days=365*20)
 
 # Cargar datos
-data = load_ticker_data(ticker, start_date, end_date)
+try:
+    data = load_ticker_data(ticker, start_date, end_date)
+    if data is not None:
+        # Procesar datos
+        st.success(f"Datos cargados exitosamente para {ticker}")
+    else:
+        st.error(f"No se pudieron cargar datos para {ticker}")
+except Exception as e:
+    st.error(f"Error inesperado: {str(e)}")
 
 if data is not None and not data.empty:
     # Información básica del activo
